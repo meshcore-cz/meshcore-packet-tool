@@ -63,6 +63,21 @@ export interface MeshcoreWasm {
   sharedSecret(privKey: string, peerPubKey: string): HexResult | ErrResult;
 }
 
+export const meshcoreOpNames = [
+  "encodeGroupText",
+  "encodeGroupTextSecret",
+  "encodeDirectText",
+  "encodeRaw",
+  "decodeEnvelope",
+  "decodeGroupText",
+  "decodeGroupTextSecret",
+  "decodeDirectText",
+  "decodeAdvert",
+  "generateKeypair",
+  "deriveChannelSecret",
+  "sharedSecret",
+] as const
+
 export const RouteTypes = [
   { code: 0, label: "TRANSPORT_FLOOD" },
   { code: 1, label: "FLOOD" },

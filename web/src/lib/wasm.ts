@@ -4,16 +4,11 @@ export * from "./wasm.gen";
 export type { ErrResult, MeshcoreWasm } from "./wasm.gen";
 
 import type { MeshcoreWasm, ErrResult } from "./wasm.gen";
+import { meshcoreOpNames } from "./wasm.gen";
 
 declare class Go {
   importObject: WebAssembly.Imports;
   run(instance: WebAssembly.Instance): Promise<void>;
-}
-
-declare global {
-  interface Window {
-    meshcore: MeshcoreWasm;
-  }
 }
 
 // ── runtime helpers ───────────────────────────────────────────────────────────
@@ -26,9 +21,12 @@ export function fmtTimestamp(unix: number): string {
   return new Date(unix * 1000).toLocaleString();
 }
 
-// ── WASM loader ───────────────────────────────────────────────────────────────
+// ── WASM loader (TinyGo) ──────────────────────────────────────────────────────
 
 const wasmBase = import.meta.env.BASE_URL;
+const wasmFile = `${wasmBase}meshpkt.wasm`;
+
+type CallExport = (opName: string, argsJSON: string) => string;
 
 let wasmReady: Promise<MeshcoreWasm>;
 
@@ -43,6 +41,15 @@ async function loadWasmExec(): Promise<void> {
   });
 }
 
+function buildMeshcore(call: CallExport): MeshcoreWasm {
+  const api = {} as MeshcoreWasm;
+  for (const name of meshcoreOpNames) {
+    (api as Record<string, (...args: unknown[]) => object>)[name] = (...args: unknown[]) =>
+      JSON.parse(call(name, JSON.stringify(args)));
+  }
+  return api;
+}
+
 export function loadWasm(): Promise<MeshcoreWasm> {
   if (wasmReady) return wasmReady;
   wasmReady = (async () => {
@@ -50,20 +57,19 @@ export function loadWasm(): Promise<MeshcoreWasm> {
     const go = new Go();
     let instance: WebAssembly.Instance;
     try {
-      const result = await WebAssembly.instantiateStreaming(fetch(`${wasmBase}meshcore.wasm`), go.importObject);
+      const result = await WebAssembly.instantiateStreaming(fetch(wasmFile), go.importObject);
       instance = result.instance;
     } catch {
-      const buf = await fetch(`${wasmBase}meshcore.wasm`).then((r) => r.arrayBuffer());
+      const buf = await fetch(wasmFile).then((r) => r.arrayBuffer());
       const result = await WebAssembly.instantiate(buf, go.importObject);
       instance = result.instance;
     }
     go.run(instance);
-    await new Promise<void>((resolve) => {
-      const id = setInterval(() => {
-        if (window.meshcore) { clearInterval(id); resolve(); }
-      }, 10);
-    });
-    return window.meshcore;
+    const call = instance.exports.call as CallExport | undefined;
+    if (!call) {
+      throw new Error("meshpkt.wasm missing export call — rebuild with TinyGo");
+    }
+    return buildMeshcore(call);
   })();
   return wasmReady;
 }

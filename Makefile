@@ -4,8 +4,10 @@ MESHCORE_GO ?= ../meshcore-go
 # Set for GitHub project pages, e.g. BASE_PATH=/meshcore-packet-tool/
 BASE_PATH ?=
 
-WASM_OUT    := web/public/meshcore.wasm
+WASM_OUT    := web/public/meshpkt.wasm
 WASM_EXEC   := web/public/wasm_exec.js
+TINYGO      ?= tinygo
+# -opt=z needs wasm-opt (binaryen). TinyGo 0.39+ for Go 1.25.
 TS_GEN      := web/src/lib/wasm.gen.ts
 
 ## install: link local meshcore-go SDK (required before first build)
@@ -25,10 +27,14 @@ generate: install
 	go run ./cmd/gen-ts -out $(TS_GEN)
 	@echo "Generated $(TS_GEN)"
 
-## wasm: generate TS interfaces, compile Go → WebAssembly, copy wasm_exec.js
+## wasm: generate TS interfaces, TinyGo → WebAssembly, copy wasm_exec.js
 wasm: generate
-	GOOS=js GOARCH=wasm go build -o $(WASM_OUT) ./wasm
-	cp "$$(go env GOROOT)/lib/wasm/wasm_exec.js" $(WASM_EXEC)
+	@command -v $(TINYGO) >/dev/null || { \
+		echo "TinyGo not found — install: https://tinygo.org/getting-started/"; \
+		exit 1; \
+	}
+	$(TINYGO) build -target=wasm -no-debug -opt=z -panic=trap -o $(WASM_OUT) ./cmd/meshpkt-wasm-lite
+	cp "$$($(TINYGO) env TINYGOROOT)/targets/wasm_exec.js" $(WASM_EXEC)
 	@echo "Built $(WASM_OUT) ($$(du -sh $(WASM_OUT) | cut -f1))"
 
 ## dev: build WASM then start Vite dev server

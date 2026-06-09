@@ -101,6 +101,13 @@ func generate(w io.Writer) error {
 	p("}")
 	p("")
 
+	p("export const meshcoreOpNames = [")
+	for _, op := range meshpkt.Ops {
+		p("  %q,", op.Name)
+	}
+	p("] as const")
+	p("")
+
 	// ── RouteTypes constant ───────────────────────────────────────────────────
 	p("export const RouteTypes = [")
 	for _, rt := range meshpkt.AllRouteTypes {

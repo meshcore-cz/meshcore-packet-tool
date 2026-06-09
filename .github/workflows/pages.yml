@@ -32,6 +32,14 @@ jobs:
         with:
           go-version: "1.25"
 
+      - name: Install TinyGo
+        run: |
+          curl -sL "https://github.com/tinygo-org/tinygo/releases/download/v0.41.1/tinygo_0.41.1_amd64.deb" -o tinygo.deb
+          sudo dpkg -i tinygo.deb
+
+      - name: Install binaryen
+        run: sudo apt-get update && sudo apt-get install -y binaryen
+
       - name: Setup Node
         uses: actions/setup-node@v4
         with:

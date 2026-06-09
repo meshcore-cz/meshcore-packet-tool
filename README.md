@@ -6,6 +6,8 @@ powered by the meshcore-go SDK compiled to WebAssembly.
 ## Prerequisites
 
 - Go 1.25+
+- [TinyGo](https://tinygo.org/getting-started/) 0.39+ (Go 1.25 support)
+- [binaryen](https://github.com/WebAssembly/binaryen) (`wasm-opt`, required for `-opt=z`)
 - Node.js 20+
 - [meshcore-go](https://github.com/meshcore-cz/meshcore-go) checked out locally (this tool imports `meshpkt` from the SDK)
 
@@ -41,7 +43,7 @@ has no published `v0.0.0` release. Use a local checkout and `make install`
 make dev
 ```
 
-This builds the Go WASM module, copies `wasm_exec.js` from your Go toolchain,
+This builds a TinyGo WASM module (~400 KB), copies TinyGo's `wasm_exec.js`,
 installs npm dependencies, and starts the Vite dev server at
 `http://localhost:5173`.
 
@@ -72,19 +74,23 @@ cd web && npm run preview
 
 ## How it works
 
-The Go WASM module (`wasm/main.go`) imports only WASM-safe leaf packages from
-the SDK (`meshpkt`, `meshkey`) — never the root package which pulls in serial
-and BLE transport dependencies. It exposes a `window.meshcore` object with
-functions registered via `syscall/js`:
+`cmd/meshpkt-wasm-lite/main.go` and `cmd/gen-ts/main.go` are copied from the
+SDK binding templates in
+[`meshcore-go/meshpkt/bindings/`](https://github.com/meshcore-cz/meshcore-go/tree/main/meshpkt/bindings).
 
-| Function | Description |
-|---|---|
-| `encodeGroupText(channelName, sender, text)` | Builds a GRP_TXT packet |
-| `encodeDirectText(privHex, peerPubHex, text)` | Builds a TXT_MSG packet |
-| `decodePacket(hexStr [, opts])` | Parses any packet; decrypts if keys provided |
-| `generateKeypair()` | Creates a fresh X25519 keypair |
-| `deriveChannelSecret(name)` | Returns SHA256(name)[:16] as hex |
-| `sharedSecret(privHex, peerPubHex)` | X25519 ECDH shared secret |
+TinyGo compiles `meshpkt` to `web/public/meshpkt.wasm` with a single exported
+`call(opName, argsJSON)` that dispatches `meshpkt.Ops`. The TypeScript loader
+(`web/src/lib/wasm.ts`) wraps that into a typed `MeshcoreWasm` API.
+
+Build command:
+
+```sh
+tinygo build -target=wasm -no-debug -opt=z -panic=trap \
+  -o web/public/meshpkt.wasm ./cmd/meshpkt-wasm-lite
+```
+
+The module imports only WASM-safe leaf packages from the SDK (`meshpkt`) — never
+the root package which pulls in serial and BLE transport dependencies.
 
 All byte arrays cross the JS/Go boundary as lowercase hex strings.
 
