@@ -11,6 +11,12 @@ declare class Go {
   run(instance: WebAssembly.Instance): Promise<void>;
 }
 
+declare global {
+  interface Window {
+    meshpktCall?: (opName: string, argsJSON: string) => object;
+  }
+}
+
 // ── runtime helpers ───────────────────────────────────────────────────────────
 
 export function isError(v: object): v is ErrResult {
@@ -26,8 +32,6 @@ export function fmtTimestamp(unix: number): string {
 const wasmBase = import.meta.env.BASE_URL;
 const wasmFile = `${wasmBase}meshpkt.wasm`;
 
-type CallExport = (opName: string, argsJSON: string) => string;
-
 let wasmReady: Promise<MeshcoreWasm>;
 
 async function loadWasmExec(): Promise<void> {
@@ -41,13 +45,22 @@ async function loadWasmExec(): Promise<void> {
   });
 }
 
-function buildMeshcore(call: CallExport): MeshcoreWasm {
+function buildMeshcore(call: (opName: string, argsJSON: string) => object): MeshcoreWasm {
   const api = {} as MeshcoreWasm;
   for (const name of meshcoreOpNames) {
     (api as Record<string, (...args: unknown[]) => object>)[name] = (...args: unknown[]) =>
-      JSON.parse(call(name, JSON.stringify(args)));
+      call(name, JSON.stringify(args));
   }
   return api;
+}
+
+async function waitForMeshpktCall(): Promise<(opName: string, argsJSON: string) => object> {
+  const deadline = Date.now() + 10_000;
+  while (Date.now() < deadline) {
+    if (window.meshpktCall) return window.meshpktCall;
+    await new Promise((r) => setTimeout(r, 10));
+  }
+  throw new Error("meshpktCall not registered — rebuild WASM with TinyGo");
 }
 
 export function loadWasm(): Promise<MeshcoreWasm> {
@@ -65,10 +78,7 @@ export function loadWasm(): Promise<MeshcoreWasm> {
       instance = result.instance;
     }
     go.run(instance);
-    const call = instance.exports.call as CallExport | undefined;
-    if (!call) {
-      throw new Error("meshpkt.wasm missing export call — rebuild with TinyGo");
-    }
+    const call = await waitForMeshpktCall();
     return buildMeshcore(call);
   })();
   return wasmReady;
