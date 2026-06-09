@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onMount } from "svelte";
   import {
     isError,
     fmtTimestamp,
@@ -8,6 +9,7 @@
     type DirectTextPayload,
     type AdvertPayload,
   } from "./wasm";
+  import { hashState, queryState, writeUrlState } from "./urlState";
 
   let { mc }: { mc: MeshcoreWasm } = $props();
 
@@ -16,17 +18,18 @@
   let envelope     = $state<Envelope | null>(null);
   let envelopeErr  = $state("");
 
-  function parseEnvelope() {
+  function parseEnvelope(): boolean {
     envelope = null;
     envelopeErr = "";
     clearPayload();
     const h = hexInput.trim().replace(/\s/g, "");
-    if (!h) { envelopeErr = "Paste a hex packet first."; return; }
+    if (!h) { envelopeErr = "Paste a hex packet first."; return false; }
     const r = mc.decodeEnvelope(h);
-    if (isError(r)) { envelopeErr = r.error; return; }
+    if (isError(r)) { envelopeErr = r.error; return false; }
     envelope = r;
     // Auto-decode unencrypted types immediately
     if (envelope.type === "ADVERT") decodeAdvert();
+    return true;
   }
 
   // ── Step 2: payload decryption ────────────────────────────────────────────────
@@ -44,6 +47,48 @@
 
   let payloadResult = $state<PayloadResult | null>(null);
   let payloadErr    = $state("");
+  let urlReady      = $state(false);
+
+  onMount(() => {
+    const q = queryState();
+    const h = hashState();
+
+    hexInput = q.get("d_packet") ?? hexInput;
+
+    const keyMode = q.get("d_key_mode");
+    if (keyMode === "name" || keyMode === "secret") p_grpKeyMode = keyMode;
+
+    p_channel = q.get("d_channel") ?? p_channel;
+    p_secret = h.get("d_secret") ?? p_secret;
+    p_priv = h.get("d_private") ?? p_priv;
+    p_peerPub = q.get("d_peer_pub") ?? p_peerPub;
+
+    urlReady = true;
+    if (hexInput && parseEnvelope()) {
+      if (envelope?.type === "GRP_TXT" && ((p_grpKeyMode === "name" && p_channel) || (p_grpKeyMode === "secret" && p_secret))) {
+        decodeGroupText();
+      } else if (envelope?.type === "TXT_MSG" && p_priv && p_peerPub) {
+        decodeDirectText();
+      }
+    }
+  });
+
+  $effect(() => {
+    if (!urlReady) return;
+    writeUrlState(
+      {
+        view: "decode",
+        d_packet: hexInput,
+        d_key_mode: p_grpKeyMode,
+        d_channel: p_grpKeyMode === "name" ? p_channel : null,
+        d_peer_pub: p_peerPub,
+      },
+      {
+        d_secret: p_grpKeyMode === "secret" ? p_secret : null,
+        d_private: p_priv,
+      },
+    );
+  });
 
   function clearPayload() {
     payloadResult = null;
@@ -88,8 +133,6 @@
     p_priv = kp.privateKey;
   }
 
-  // Re-clear payload decode when envelope changes
-  $effect(() => { if (envelope) clearPayload(); });
 </script>
 
 <div class="panel">

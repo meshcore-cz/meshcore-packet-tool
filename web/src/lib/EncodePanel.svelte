@@ -1,5 +1,7 @@
 <script lang="ts">
+  import { onMount } from "svelte";
   import { isError, type MeshcoreWasm, RouteTypes, PayloadTypes } from "./wasm";
+  import { hashState, queryState, writeUrlState } from "./urlState";
 
   let { mc }: { mc: MeshcoreWasm } = $props();
 
@@ -31,6 +33,67 @@
   let result      = $state("");
   let resultError = $state("");
   let copied      = $state(false);
+  let urlReady    = $state(false);
+
+  onMount(() => {
+    const q = queryState();
+    const h = hashState();
+
+    const eTab = q.get("e_type");
+    if (eTab === "grptxt" || eTab === "txtmsg" || eTab === "raw") tab = eTab;
+
+    const keyMode = q.get("e_key_mode");
+    if (keyMode === "name" || keyMode === "secret") g_keyMode = keyMode;
+
+    g_channel = q.get("e_channel") ?? g_channel;
+    g_sender = q.get("e_sender") ?? g_sender;
+    g_text = q.get("e_text") ?? g_text;
+    g_secret = h.get("e_secret") ?? g_secret;
+
+    t_priv = h.get("e_private") ?? t_priv;
+    t_peerPub = q.get("e_peer_pub") ?? t_peerPub;
+    t_text = q.get("e_direct_text") ?? t_text;
+
+    r_route = numberParam(q, "e_route", r_route);
+    r_type = numberParam(q, "e_payload_type", r_type);
+    r_version = numberParam(q, "e_version", r_version);
+    r_pathHash = numberParam(q, "e_path_hash_size", r_pathHash);
+    r_payloadHex = q.get("e_payload") ?? r_payloadHex;
+
+    urlReady = true;
+  });
+
+  $effect(() => {
+    if (!urlReady) return;
+    writeUrlState(
+      {
+        view: "encode",
+        e_type: tab,
+        e_key_mode: tab === "grptxt" ? g_keyMode : null,
+        e_channel: tab === "grptxt" && g_keyMode === "name" ? g_channel : null,
+        e_sender: tab === "grptxt" ? g_sender : null,
+        e_text: tab === "grptxt" ? g_text : null,
+        e_peer_pub: tab === "txtmsg" ? t_peerPub : null,
+        e_direct_text: tab === "txtmsg" ? t_text : null,
+        e_route: tab === "raw" ? r_route : null,
+        e_payload_type: tab === "raw" ? r_type : null,
+        e_version: tab === "raw" ? r_version : null,
+        e_path_hash_size: tab === "raw" ? r_pathHash : null,
+        e_payload: tab === "raw" ? r_payloadHex : null,
+      },
+      {
+        e_secret: tab === "grptxt" && g_keyMode === "secret" ? g_secret : null,
+        e_private: tab === "txtmsg" ? t_priv : null,
+      },
+    );
+  });
+
+  function numberParam(q: URLSearchParams, key: string, fallback: number): number {
+    const raw = q.get(key);
+    if (raw == null) return fallback;
+    const n = Number(raw);
+    return Number.isFinite(n) ? n : fallback;
+  }
 
   function encode() {
     result = "";

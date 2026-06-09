@@ -31,6 +31,9 @@ This builds a TinyGo WASM module (~400 KB), copies TinyGo's `wasm_exec.js`,
 installs npm dependencies, and starts the Vite dev server at
 `http://localhost:5173`.
 
+The web UI includes a benchmark tab for measuring `decodeEnvelope` throughput
+with configurable duration, worker count, and batch size.
+
 For a static production build:
 
 ```sh

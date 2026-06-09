@@ -3,17 +3,31 @@
   import { loadWasm, type MeshcoreWasm } from "./lib/wasm";
   import EncodePanel from "./lib/EncodePanel.svelte";
   import DecodePanel from "./lib/DecodePanel.svelte";
+  import BenchmarkPanel from "./lib/BenchmarkPanel.svelte";
+  import { queryState, writeUrlState } from "./lib/urlState";
 
   let mc = $state<MeshcoreWasm | null>(null);
   let loadError = $state("");
-  let activeTab = $state<"encode" | "decode">("encode");
+  let activeTab = $state<"encode" | "decode" | "benchmark">("encode");
+  let urlReady = $state(false);
 
   onMount(async () => {
+    const view = queryState().get("view");
+    if (view === "encode" || view === "decode" || view === "benchmark") {
+      activeTab = view;
+    }
+    urlReady = true;
+
     try {
       mc = await loadWasm();
     } catch (e) {
       loadError = String(e);
     }
+  });
+
+  $effect(() => {
+    if (!urlReady) return;
+    writeUrlState({ view: activeTab });
   });
 </script>
 
@@ -41,6 +55,9 @@
       <button class:active={activeTab === "decode"} onclick={() => (activeTab = "decode")}>
         ⬇ Decode
       </button>
+      <button class:active={activeTab === "benchmark"} onclick={() => (activeTab = "benchmark")}>
+        Benchmark
+      </button>
     </nav>
 
     <div class="panel-wrap">
@@ -48,17 +65,22 @@
         <div class="loading">Loading WASM module…</div>
       {:else if activeTab === "encode"}
         <EncodePanel {mc} />
-      {:else}
+      {:else if activeTab === "decode"}
         <DecodePanel {mc} />
+      {:else}
+        <BenchmarkPanel {mc} />
       {/if}
     </div>
   {/if}
 
   <footer>
-    Powered by
+    powered by
     <a href="https://github.com/meshcore-cz/meshpkt" target="_blank" rel="noreferrer">meshpkt</a>
     ·
-    <a href="https://github.com/meshcore-cz/meshcore-go" target="_blank" rel="noreferrer">meshcore-go</a>
+    part of
+    <a href="https://github.com/meshcore-cz/meshcore-go" target="_blank" rel="noreferrer">meshcore-go SDK</a>
+    ·
+    <a href="https://github.com/meshcore-cz/meshcore-packet-tool" target="_blank" rel="noreferrer">source code</a>
   </footer>
 </div>
 
