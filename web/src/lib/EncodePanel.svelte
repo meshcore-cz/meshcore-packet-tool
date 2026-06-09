@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { isError, type MeshcoreWasm } from "./wasm";
-  import { OpMetas, type OpMeta, type ParamMeta } from "./wasm.gen";
+  import { OpMetas, type OpMeta, type ParamMeta } from "./wasm";
   import { writeUrlState } from "./urlState";
 
   let { mc }: { mc: MeshcoreWasm } = $props();

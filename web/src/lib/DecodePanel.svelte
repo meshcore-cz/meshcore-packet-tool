@@ -10,7 +10,7 @@
     type MeshcoreWasm,
     type Envelope,
   } from "./wasm";
-  import { OpMetas, type OpMeta, type ParamMeta, type ResultMeta } from "./wasm.gen";
+  import { OpMetas, type OpMeta, type ParamMeta, type ResultMeta } from "./wasm";
   import { hashState, queryState, readStoredState, writeStoredState, writeUrlState } from "./urlState";
 
   let { mc }: { mc: MeshcoreWasm } = $props();

@@ -6,7 +6,7 @@
   import githubDark from "@shikijs/themes/github-dark";
   import { isError, fmtTimestamp, type MeshcoreWasm, type Envelope } from "./wasm";
   import { hashState, queryState, writeUrlState, readStoredState, writeStoredState } from "./urlState";
-  import { OpMetas, type OpMeta, type ParamMeta, type ResultMeta } from "./wasm.gen";
+  import { OpMetas, type OpMeta, type ParamMeta, type ResultMeta } from "./wasm";
 
   let { mc }: { mc: MeshcoreWasm } = $props();
 
@@ -457,6 +457,12 @@
         </table>
       </div>
 
+      <!-- What is this packet type? -->
+      {@const decodeDoc = encodeOps.find(o => o.tabGroupLabel === envelope.type)?.tabGroupDoc || decodeOps.find(o => o.packetType === envelope.type)?.tabGroupDoc || ""}
+      {#if decodeDoc}
+        <div class="doc-note"><b>{envelope.type}</b> — {decodeDoc}</div>
+      {/if}
+
       <!-- Step 2 -->
       {#if opsForDecodeType(envelope.type).length > 0}
         {@const step2ops = opsForDecodeType(envelope.type)}
@@ -582,6 +588,10 @@
                 <button class:active={op.name === v.name} onclick={() => eVariants[tg] = v.name}>{v.tabLabel || v.name}</button>
               {/each}
             </div>
+          {/if}
+
+          {#if op.tabGroupDoc}
+            <div class="doc-note"><b>{op.tabGroupLabel}</b> — {op.tabGroupDoc}</div>
           {/if}
 
           <div class="fields">
@@ -794,6 +804,11 @@
   /* ── Misc ─────────────────────────────────────────────────────────────────── */
   .err { background: #3d1f1f; border: 1px solid #6e2a2a; border-radius: 6px; color: #f97583; font-size: 12px; padding: 8px 10px; }
   .info-note { background: #1c2128; border: 1px solid #30363d; border-radius: 6px; color: #8b949e; font-size: 12px; padding: 10px 12px; }
+  .doc-note {
+    background: #0d1117; border: 1px solid #30363d; border-left: 3px solid #388bfd;
+    border-radius: 6px; color: #8b949e; font-size: 12px; line-height: 1.6; padding: 10px 12px;
+  }
+  .doc-note b { color: #c9d1d9; font-weight: 600; }
   .empty-state { color: #6e7681; font-size: 13px; padding: 16px 0; text-align: center; }
 
   /* ── Example links ────────────────────────────────────────────────────────── */
