@@ -1,6 +1,5 @@
 .PHONY: install generate wasm dev build clean
 
-MESHCORE_GO ?= ../meshcore-go
 # Set for GitHub project pages, e.g. BASE_PATH=/meshcore-packet-tool/
 BASE_PATH ?=
 
@@ -10,17 +9,9 @@ TINYGO      ?= tinygo
 # -opt=z needs wasm-opt (binaryen). TinyGo 0.39+ for Go 1.25.
 TS_GEN      := web/src/lib/wasm.gen.ts
 
-## install: link local meshcore-go SDK (required before first build)
+## install: download Go module dependencies
 install:
-	@test -f "$(MESHCORE_GO)/go.mod" || { \
-		echo "meshcore-go not found at $(MESHCORE_GO)"; \
-		echo "Clone it next to this repo, e.g.:"; \
-		echo "  git clone https://github.com/meshcore-cz/meshcore-go.git $(MESHCORE_GO)"; \
-		exit 1; \
-	}
-	go mod edit -replace=github.com/meshcore-cz/meshcore-go=$(MESHCORE_GO)
-	go mod tidy
-	@echo "Using meshcore-go from $(MESHCORE_GO)"
+	go mod download
 
 ## generate: regenerate TypeScript interfaces from meshpkt.Ops
 generate: install

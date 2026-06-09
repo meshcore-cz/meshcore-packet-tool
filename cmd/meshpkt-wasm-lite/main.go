@@ -14,7 +14,7 @@ package main
 import (
 	"syscall/js"
 
-	"github.com/meshcore-cz/meshcore-go/meshpkt"
+	"github.com/meshcore-cz/meshpkt"
 )
 
 func main() {

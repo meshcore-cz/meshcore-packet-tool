@@ -1,7 +1,8 @@
 # wasm-packet-tool
 
 A Svelte web app that encodes and decodes MeshCore radio packet wire formats,
-powered by the meshcore-go SDK compiled to WebAssembly.
+powered by the standalone [meshpkt](https://github.com/meshcore-cz/meshpkt)
+codec compiled to WebAssembly.
 
 ## Prerequisites
 
@@ -9,33 +10,16 @@ powered by the meshcore-go SDK compiled to WebAssembly.
 - [TinyGo](https://tinygo.org/getting-started/) 0.39+ (Go 1.25 support)
 - [binaryen](https://github.com/WebAssembly/binaryen) (`wasm-opt`, required for `-opt=z`)
 - Node.js 20+
-- [meshcore-go](https://github.com/meshcore-cz/meshcore-go) checked out locally (this tool imports `meshpkt` from the SDK)
 
 ## Install
 
-Clone the SDK as a sibling of this repo (default path `../meshcore-go`):
-
 ```sh
-git clone https://github.com/meshcore-cz/meshcore-go.git ../meshcore-go
 cd meshcore-packet-tool
 make install
 ```
 
-`make install` adds a `replace` directive in `go.mod` so Go uses your local
-checkout instead of trying to download a non-existent `v0.0.0` tag from the
-module proxy.
-
-Custom SDK path:
-
-```sh
-make install MESHCORE_GO=/path/to/meshcore-go
-```
-
-### `unknown revision v0.0.0`
-
-`go mod download github.com/meshcore-cz/meshcore-go` fails because the module
-has no published `v0.0.0` release. Use a local checkout and `make install`
-(which writes `replace github.com/meshcore-cz/meshcore-go => ../meshcore-go`).
+`make install` downloads Go module dependencies, including
+`github.com/meshcore-cz/meshpkt`.
 
 ## Running
 
@@ -59,7 +43,7 @@ Pushes to `main` deploy automatically via
 [`.github/workflows/pages.yml`](.github/workflows/pages.yml).
 
 1. In the repo **Settings → Pages**, set **Source** to **GitHub Actions**.
-2. Merge to `main`; the workflow checks out [meshcore-go](https://github.com/meshcore-cz/meshcore-go), builds WASM + the Vite bundle, and publishes `web/dist`.
+2. Merge to `main`; the workflow builds WASM + the Vite bundle and publishes `web/dist`.
 
 Live URL (project site):
 
@@ -76,11 +60,12 @@ cd web && npm run preview
 
 `cmd/meshpkt-wasm-lite/main.go` and `cmd/gen-ts/main.go` are copied from the
 SDK binding templates in
-[`meshcore-go/meshpkt/bindings/`](https://github.com/meshcore-cz/meshcore-go/tree/main/meshpkt/bindings).
+[`meshpkt/bindings/`](https://github.com/meshcore-cz/meshpkt/tree/main/bindings).
 
-TinyGo compiles `meshpkt` to `web/public/meshpkt.wasm` with a single exported
-`call(opName, argsJSON)` that dispatches `meshpkt.Ops`. The TypeScript loader
-(`web/src/lib/wasm.ts`) wraps that into a typed `MeshcoreWasm` API.
+TinyGo compiles `meshpkt` to `web/public/meshpkt.wasm` and registers
+`window.meshpktCall(opName, argsJSON)` to dispatch `meshpkt.Ops`. The
+TypeScript loader (`web/src/lib/wasm.ts`) wraps that into a typed
+`MeshcoreWasm` API.
 
 Build command:
 
