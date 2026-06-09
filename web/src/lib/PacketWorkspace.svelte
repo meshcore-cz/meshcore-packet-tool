@@ -415,14 +415,12 @@
     {#if mode === "decode" && envError && hex.trim()}
       <div class="err">{envError}</div>
     {/if}
-    {#if mode === "decode"}
-      <div class="examples">
-        Examples:
-        <button class="ex-link" onclick={() => hex = "0d40efbeadde"}>ACK</button>
-        <button class="ex-link" onclick={() => hex = "1540d9412a330c3bfc80e2114278944c79dad5760f2e8c19e6ad26c9ece314b2307ca71950"}>GRP_TXT</button>
-        <button class="ex-link" onclick={() => hex = "11453287568f06bf2d5ad94765d9aaa4aef45a465a5a84142b5abb55eafe11980bc7b891218a83ebb08f0ba84789276a31c13dad4caf71b6b7f99c1fdfccaa7c1db9d1696be4416a274f3417182d77d486d4faa2a7b3bcc2035c9d8a27af4b2ab45b2b6bc75037c31fd316829639230e929a25fc02a082dc00435a2e4e4943205265706561746572"} title="CZ.NIC Repeater, Prague — hardware capture 2026-06-09">ADVERT ✦</button>
-      </div>
-    {/if}
+    <div class="examples">
+      Examples:
+      <button class="ex-link" onclick={() => hex = "0d40efbeadde"}>ACK</button>
+      <button class="ex-link" onclick={() => hex = "1540d9412a330c3bfc80e2114278944c79dad5760f2e8c19e6ad26c9ece314b2307ca71950"}>GRP_TXT</button>
+      <button class="ex-link" onclick={() => hex = "11453287568f06bf2d5ad94765d9aaa4aef45a465a5a84142b5abb55eafe11980bc7b891218a83ebb08f0ba84789276a31c13dad4caf71b6b7f99c1fdfccaa7c1db9d1696be4416a274f3417182d77d486d4faa2a7b3bcc2035c9d8a27af4b2ab45b2b6bc75037c31fd316829639230e929a25fc02a082dc00435a2e4e4943205265706561746572"} title="CZ.NIC Repeater, Prague — hardware capture 2026-06-09">ADVERT ✦</button>
+    </div>
   </div>
 
   <!-- ── Mode tabs ─────────────────────────────────────────────────────────── -->
