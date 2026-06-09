@@ -1,8 +1,6 @@
-web/node_modules/
-web/dist/
-web/public/meshpkt.wasm
-web/public/meshcore.wasm
-web/public/wasm_exec.js
-gen-ts
-meshpkt-wasm-lite
+node_modules
+dist
+.DS_Store
 .claude
+public/*.wasm
+public/wasm_exec.js

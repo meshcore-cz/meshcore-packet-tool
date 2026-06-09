@@ -5,20 +5,20 @@ BASE_PATH ?=
 
 ## install: install npm dependencies
 install:
-	cd web && npm install
+	npm install
 
 ## dev: start Vite dev server
 dev: install
-	cd web && npm run dev
+	npm run dev
 
-## build: produce a static Vite bundle (set BASE_PATH for GitHub Pages)
+## build: produce a static bundle (set BASE_PATH for GitHub Pages)
 build: install
-	cd web && BASE_PATH=$(BASE_PATH) npm run build
-	@touch web/dist/.nojekyll
+	BASE_PATH=$(BASE_PATH) npm run build
+	@touch dist/.nojekyll
 
 ## clean: remove build artifacts
 clean:
-	rm -rf web/dist web/node_modules
+	rm -rf dist node_modules
 
 ## help: show this message
 help:
