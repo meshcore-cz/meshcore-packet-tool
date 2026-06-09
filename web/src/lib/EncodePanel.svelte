@@ -1,98 +1,144 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { isError, type MeshcoreWasm, RouteTypes, PayloadTypes } from "./wasm";
-  import { hashState, queryState, writeUrlState } from "./urlState";
+  import { isError, type MeshcoreWasm } from "./wasm";
+  import { OpMetas, type OpMeta, type ParamMeta } from "./wasm.gen";
+  import { writeUrlState } from "./urlState";
 
   let { mc }: { mc: MeshcoreWasm } = $props();
 
-  type PacketTab = "grptxt" | "txtmsg" | "raw";
-  let tab = $state<PacketTab>("grptxt");
+  // ── data derived from OpMetas ─────────────────────────────────────────────
 
-  // GRP_TXT fields
-  type GrpKeyMode = "name" | "secret";
-  let g_keyMode = $state<GrpKeyMode>("name");
-  let g_channel = $state("#test");
-  let g_secret  = $state("");
-  let g_sender  = $state("");
-  let g_text    = $state("");
+  const encodeOps = OpMetas.filter(op => op.category === "encode");
 
-  // TXT_MSG fields
-  let t_priv    = $state("");
-  let t_myPub   = $state("");
-  let t_peerPub = $state("");
-  let t_text    = $state("");
+  // Ordered unique tab groups (first occurrence order)
+  const tabGroups: string[] = [];
+  for (const op of encodeOps) {
+    if (!tabGroups.includes(op.tabGroup)) tabGroups.push(op.tabGroup);
+  }
 
-  // RAW fields
-  let r_route       = $state(1);  // FLOOD
-  let r_type        = $state(5);  // GRP_TXT
-  let r_version     = $state(0);
-  let r_pathHash    = $state(2);
-  let r_payloadHex  = $state("");
+  // tabGroup → all ops in that group
+  function opsForTab(tg: string): OpMeta[] {
+    return encodeOps.filter(op => op.tabGroup === tg);
+  }
 
-  // Output
+  // tabGroup → first op (for tab label/sub)
+  function tabMeta(tg: string): OpMeta {
+    return opsForTab(tg)[0];
+  }
+
+  // ── form state ────────────────────────────────────────────────────────────
+
+  let vals = $state<Record<string, unknown>>({});
+  let activeTab = $state(tabGroups[0] ?? "");
+  // tabGroup → active op.name (for variant toggle)
+  let activeVariants = $state<Record<string, string>>({});
+  // Derived public keys shown below keypair inputs: key(opName,paramName) → pubkey string
+  let derivedPubKeys = $state<Record<string, string>>({});
+
   let result      = $state("");
   let resultError = $state("");
   let copied      = $state(false);
-  let urlReady    = $state(false);
+  let mounted     = $state(false);
+
+  function key(opName: string, pName: string): string {
+    return `${opName}:${pName}`;
+  }
+
+  function getStr(opName: string, pName: string): string {
+    return String(vals[key(opName, pName)] ?? "");
+  }
+  function getNum(opName: string, pName: string): number {
+    const v = vals[key(opName, pName)];
+    return typeof v === "number" ? v : 0;
+  }
+  function getBool(opName: string, pName: string): boolean {
+    return Boolean(vals[key(opName, pName)]);
+  }
+  function setVal(opName: string, pName: string, v: unknown) {
+    vals[key(opName, pName)] = v;
+  }
+
+  function currentOp(): OpMeta | undefined {
+    const ops = opsForTab(activeTab);
+    if (!ops.length) return undefined;
+    const variantName = activeVariants[activeTab];
+    return ops.find(op => op.name === variantName) ?? ops[0];
+  }
+
+  function setVariant(tg: string, opName: string) {
+    activeVariants[tg] = opName;
+  }
+
+  // ── session storage persistence ──────────────────────────────────────────
+
+  const SS_VALS     = "meshcore-packet-tool:encode-vals";
+  const SS_TAB      = "meshcore-packet-tool:encode-tab";
+  const SS_VARIANTS = "meshcore-packet-tool:encode-variants";
 
   onMount(() => {
-    const q = queryState();
-    const h = hashState();
-
-    const eTab = q.get("e_type");
-    if (eTab === "grptxt" || eTab === "txtmsg" || eTab === "raw") tab = eTab;
-
-    const keyMode = q.get("e_key_mode");
-    if (keyMode === "name" || keyMode === "secret") g_keyMode = keyMode;
-
-    g_channel = q.get("e_channel") ?? g_channel;
-    g_sender = q.get("e_sender") ?? g_sender;
-    g_text = q.get("e_text") ?? g_text;
-    g_secret = h.get("e_secret") ?? g_secret;
-
-    t_priv = h.get("e_private") ?? t_priv;
-    t_peerPub = q.get("e_peer_pub") ?? t_peerPub;
-    t_text = q.get("e_direct_text") ?? t_text;
-
-    r_route = numberParam(q, "e_route", r_route);
-    r_type = numberParam(q, "e_payload_type", r_type);
-    r_version = numberParam(q, "e_version", r_version);
-    r_pathHash = numberParam(q, "e_path_hash_size", r_pathHash);
-    r_payloadHex = q.get("e_payload") ?? r_payloadHex;
-
-    urlReady = true;
+    try {
+      const storedVals = sessionStorage.getItem(SS_VALS);
+      if (storedVals) vals = JSON.parse(storedVals);
+      const storedTab = sessionStorage.getItem(SS_TAB);
+      if (storedTab && tabGroups.includes(storedTab)) activeTab = storedTab;
+      const storedVariants = sessionStorage.getItem(SS_VARIANTS);
+      if (storedVariants) activeVariants = JSON.parse(storedVariants);
+    } catch {}
+    mounted = true;
   });
 
   $effect(() => {
-    if (!urlReady) return;
-    writeUrlState(
-      {
-        view: "encode",
-        e_type: tab,
-        e_key_mode: tab === "grptxt" ? g_keyMode : null,
-        e_channel: tab === "grptxt" && g_keyMode === "name" ? g_channel : null,
-        e_sender: tab === "grptxt" ? g_sender : null,
-        e_text: tab === "grptxt" ? g_text : null,
-        e_peer_pub: tab === "txtmsg" ? t_peerPub : null,
-        e_direct_text: tab === "txtmsg" ? t_text : null,
-        e_route: tab === "raw" ? r_route : null,
-        e_payload_type: tab === "raw" ? r_type : null,
-        e_version: tab === "raw" ? r_version : null,
-        e_path_hash_size: tab === "raw" ? r_pathHash : null,
-        e_payload: tab === "raw" ? r_payloadHex : null,
-      },
-      {
-        e_secret: tab === "grptxt" && g_keyMode === "secret" ? g_secret : null,
-        e_private: tab === "txtmsg" ? t_priv : null,
-      },
-    );
+    if (!mounted) return;
+    try {
+      // Read vals to register reactive dependency (Svelte tracks property access)
+      const snapshot = JSON.stringify(vals);
+      sessionStorage.setItem(SS_VALS, snapshot);
+      sessionStorage.setItem(SS_TAB, activeTab);
+      sessionStorage.setItem(SS_VARIANTS, JSON.stringify(activeVariants));
+    } catch {}
+    writeUrlState({ view: "encode", e_type: activeTab }, {});
   });
 
-  function numberParam(q: URLSearchParams, key: string, fallback: number): number {
-    const raw = q.get(key);
-    if (raw == null) return fallback;
-    const n = Number(raw);
-    return Number.isFinite(n) ? n : fallback;
+  // ── generic form layout helpers ────────────────────────────────────────────
+
+  /**
+   * Group params into layout rows. Params with the same Group are placed
+   * together in one row (rendered side-by-side). AutoFill params are excluded.
+   */
+  function layoutRows(params: ParamMeta[]): ParamMeta[][] {
+    const rows: ParamMeta[][] = [];
+    const seenGroups = new Set<string>();
+    for (const p of params) {
+      if (p.autoFill) continue;
+      if (p.group) {
+        if (seenGroups.has(p.group)) continue;
+        seenGroups.add(p.group);
+        rows.push(params.filter(q => q.group === p.group && !q.autoFill));
+      } else {
+        rows.push([p]);
+      }
+    }
+    return rows;
+  }
+
+  /** Returns true if a param should be visible given current form values. */
+  function isVisible(opName: string, p: ParamMeta): boolean {
+    if (!p.showWhen) return true;
+    return getNum(opName, p.showWhen) === p.showValue;
+  }
+
+  // ── actions ───────────────────────────────────────────────────────────────
+
+  function handleAction(opName: string, param: ParamMeta) {
+    resultError = "";
+    const kp = mc.generateKeypair();
+    if (isError(kp)) { resultError = kp.error; return; }
+    if (param.action === "keypair") {
+      setVal(opName, param.name, kp.privateKey);
+      derivedPubKeys[key(opName, param.name)] = kp.publicKey;
+    } else if (param.action === "keypair-pub") {
+      setVal(opName, param.name, kp.publicKey);
+    }
   }
 
   function encode() {
@@ -100,33 +146,35 @@
     resultError = "";
     copied = false;
 
-    if (tab === "grptxt") {
-      if (!g_sender || !g_text) { resultError = "Fill in sender and message."; return; }
-      let r;
-      if (g_keyMode === "secret") {
-        if (!g_secret) { resultError = "Enter the channel secret (hex)."; return; }
-        r = mc.encodeGroupTextSecret(g_secret, g_sender, g_text);
-      } else {
-        if (!g_channel) { resultError = "Enter a channel name."; return; }
-        r = mc.encodeGroupText(g_channel, g_sender, g_text);
+    const op = currentOp();
+    if (!op) { resultError = "No active operation."; return; }
+
+    // Collect args in param order (skip autoFill params — they shouldn't exist for encode ops)
+    const argList: unknown[] = [];
+    for (const param of op.params) {
+      if (param.autoFill) continue;
+      switch (param.kind) {
+        case "int":
+          argList.push(param.widget === "checkbox"
+            ? (getBool(op.name, param.name) ? 1 : 0)
+            : Math.trunc(getNum(op.name, param.name)));
+          break;
+        case "float":
+          argList.push(getNum(op.name, param.name));
+          break;
+        default: // "string" | "hex"
+          argList.push(getStr(op.name, param.name));
       }
-      if (isError(r)) { resultError = r.error; } else { result = r.hex; }
-
-    } else if (tab === "txtmsg") {
-      if (!t_priv || !t_peerPub || !t_text) { resultError = "Fill in your private key, peer public key and message."; return; }
-      const r = mc.encodeDirectText(t_priv, t_peerPub, t_text);
-      if (isError(r)) { resultError = r.error; } else { result = r.hex; }
-
-    } else {
-      const r = mc.encodeRaw(r_route, r_type, r_version, r_pathHash, r_payloadHex);
-      if (isError(r)) { resultError = r.error; } else { result = r.hex; }
     }
-  }
 
-  function generateKeypair() {
-    const kp = mc.generateKeypair();
-    t_priv = kp.privateKey;
-    t_myPub = kp.publicKey;
+    const fn = (mc as Record<string, (...args: unknown[]) => unknown>)[op.name];
+    if (typeof fn !== "function") { resultError = `Unknown op: ${op.name}`; return; }
+    const r = fn(...argList) as { hex?: string } | { error: string };
+    if (isError(r)) {
+      resultError = r.error;
+    } else {
+      result = String((r as { hex?: string }).hex ?? JSON.stringify(r));
+    }
   }
 
   async function copy() {
@@ -138,116 +186,133 @@
 </script>
 
 <div class="panel">
-  <!-- Packet type tabs -->
+  <!-- ── Packet type tabs ─────────────────────────────────────────────────── -->
   <div class="type-tabs">
-    <button class:active={tab === "grptxt"} onclick={() => (tab = "grptxt")}>
-      GRP_TXT
-      <span class="sub">channel message</span>
-    </button>
-    <button class:active={tab === "txtmsg"} onclick={() => (tab = "txtmsg")}>
-      TXT_MSG
-      <span class="sub">direct message</span>
-    </button>
-    <button class:active={tab === "raw"} onclick={() => (tab = "raw")}>
-      RAW
-      <span class="sub">any type</span>
-    </button>
+    {#each tabGroups as tg}
+      {@const meta = tabMeta(tg)}
+      <button class:active={activeTab === tg} onclick={() => { activeTab = tg; result = ""; resultError = ""; }}>
+        {meta.tabGroupLabel || tg}
+        {#if meta.tabGroupSub}<span class="sub">{meta.tabGroupSub}</span>{/if}
+      </button>
+    {/each}
   </div>
 
-  <!-- ── GRP_TXT ── -->
-  {#if tab === "grptxt"}
-    <div class="fields">
-      <div class="mode-toggle">
-        <button class:active={g_keyMode === "name"}   onclick={() => (g_keyMode = "name")}>Channel name</button>
-        <button class:active={g_keyMode === "secret"} onclick={() => (g_keyMode = "secret")}>Channel secret</button>
-      </div>
-      {#if g_keyMode === "name"}
-        <label>
-          <span class="lbl">Channel name</span>
-          <input bind:value={g_channel} placeholder="#test" />
-        </label>
-      {:else}
-        <label>
-          <span class="lbl">Channel secret (hex, 16 bytes)</span>
-          <input bind:value={g_secret} placeholder="32 hex chars" class="mono" />
-        </label>
-      {/if}
-      <label>
-        <span class="lbl">Sender name</span>
-        <input bind:value={g_sender} placeholder="Alice" />
-      </label>
-      <label>
-        <span class="lbl">Message</span>
-        <textarea bind:value={g_text} placeholder="Hello mesh!" rows={3}></textarea>
-      </label>
-    </div>
+  <!-- ── Form for active tab ──────────────────────────────────────────────── -->
+  {#each tabGroups as tg}
+    {#if activeTab === tg}
+      {@const ops = opsForTab(tg)}
+      {@const op = ops.find(o => o.name === (activeVariants[tg] ?? ops[0]?.name)) ?? ops[0]}
 
-  <!-- ── TXT_MSG ── -->
-  {:else if tab === "txtmsg"}
-    <div class="fields">
-      <label>
-        <span class="lbl">My private key</span>
-        <div class="key-row">
-          <input bind:value={t_priv} placeholder="64 hex chars" class="mono" />
-          <button class="sm" onclick={generateKeypair}>Generate</button>
+      <!-- Variant toggle (only when there are multiple ops in the group) -->
+      {#if ops.length > 1 && op}
+        <div class="mode-toggle">
+          {#each ops as variant}
+            <button
+              class:active={op.name === variant.name}
+              onclick={() => setVariant(tg, variant.name)}
+            >{variant.tabLabel || variant.name}</button>
+          {/each}
         </div>
-      </label>
-      {#if t_myPub}
-        <label>
-          <span class="lbl">My public key (derived)</span>
-          <input value={t_myPub} readonly class="mono dim" />
-        </label>
       {/if}
-      <label>
-        <span class="lbl">Peer public key</span>
-        <input bind:value={t_peerPub} placeholder="64 hex chars" class="mono" />
-      </label>
-      <label>
-        <span class="lbl">Message</span>
-        <textarea bind:value={t_text} placeholder="Hello!" rows={3}></textarea>
-      </label>
-    </div>
 
-  <!-- ── RAW ── -->
-  {:else}
-    <div class="fields">
-      <div class="two-col">
-        <label>
-          <span class="lbl">Route type</span>
-          <select bind:value={r_route}>
-            {#each RouteTypes as rt}
-              <option value={rt.code}>{rt.label}</option>
-            {/each}
-          </select>
-        </label>
-        <label>
-          <span class="lbl">Payload type</span>
-          <select bind:value={r_type}>
-            {#each PayloadTypes as pt}
-              <option value={pt.code}>{pt.label} (0x{pt.code.toString(16).padStart(2,"0")})</option>
-            {/each}
-          </select>
-        </label>
-        <label>
-          <span class="lbl">Version (0–3)</span>
-          <input type="number" bind:value={r_version} min={0} max={3} />
-        </label>
-        <label>
-          <span class="lbl">Path hash size (bytes)</span>
-          <select bind:value={r_pathHash}>
-            <option value={1}>1</option>
-            <option value={2}>2</option>
-            <option value={3}>3</option>
-            <option value={4}>4</option>
-          </select>
-        </label>
-      </div>
-      <label>
-        <span class="lbl">Payload (hex)</span>
-        <textarea bind:value={r_payloadHex} placeholder="Raw payload bytes as hex (may be empty)" rows={3} class="mono"></textarea>
-      </label>
-    </div>
-  {/if}
+      <!-- Generic form fields -->
+      {#if op}
+        <div class="fields">
+          {#each layoutRows(op.params) as row}
+            {#if row.some(p => isVisible(op.name, p))}
+              <div class:two-col={row.length > 1}>
+                {#each row as param}
+                  {#if isVisible(op.name, param)}
+                    {#if param.widget === "checkbox"}
+                      <!-- Toggle button (ParamInt 0/1) — matches the JSON toggle style -->
+                      <button
+                        class="toggle-btn"
+                        class:active={getBool(op.name, param.name)}
+                        onclick={() => setVal(op.name, param.name, getBool(op.name, param.name) ? 0 : 1)}
+                      >
+                        <span class="toggle-dot"></span>
+                        <span>{param.label || param.name}</span>
+                      </button>
+
+                    {:else if param.choices.length > 0}
+                      <!-- Select (ParamInt with Choices) -->
+                      <label>
+                        <span class="lbl">{param.label || param.name}</span>
+                        <select
+                          value={getNum(op.name, param.name)}
+                          onchange={e => setVal(op.name, param.name, Number(e.currentTarget.value))}
+                        >
+                          {#each param.choices as c}
+                            <option value={c.value}>{c.label}</option>
+                          {/each}
+                        </select>
+                      </label>
+
+                    {:else if param.widget === "textarea"}
+                      <!-- Textarea -->
+                      <label>
+                        <span class="lbl">{param.label || param.name}</span>
+                        <textarea
+                          value={getStr(op.name, param.name)}
+                          oninput={e => setVal(op.name, param.name, e.currentTarget.value)}
+                          placeholder={param.placeholder}
+                          rows={3}
+                          class:mono={param.kind === "hex"}
+                        ></textarea>
+                      </label>
+
+                    {:else if param.kind === "int" || param.kind === "float"}
+                      <!-- Number input -->
+                      <label>
+                        <span class="lbl">{param.label || param.name}</span>
+                        <input
+                          type="number"
+                          value={getNum(op.name, param.name)}
+                          oninput={e => setVal(op.name, param.name, Number(e.currentTarget.value))}
+                          placeholder={param.placeholder}
+                          step={param.kind === "float" ? "0.000001" : "1"}
+                        />
+                      </label>
+
+                    {:else}
+                      <!-- Text / hex input, with optional action button -->
+                      <label>
+                        <span class="lbl">{param.label || param.name}</span>
+                        {#if param.action}
+                          <div class="key-row">
+                            <input
+                              value={getStr(op.name, param.name)}
+                              oninput={e => setVal(op.name, param.name, e.currentTarget.value)}
+                              placeholder={param.placeholder}
+                              class:mono={param.kind === "hex"}
+                            />
+                            <button class="sm" onclick={() => handleAction(op.name, param)}>Generate</button>
+                          </div>
+                          {#if derivedPubKeys[key(op.name, param.name)]}
+                            <div class="derived-pub">
+                              <span class="lbl-sm">Public key (derived)</span>
+                              <input value={derivedPubKeys[key(op.name, param.name)]} readonly class="mono dim" />
+                            </div>
+                          {/if}
+                        {:else}
+                          <input
+                            value={getStr(op.name, param.name)}
+                            oninput={e => setVal(op.name, param.name, e.currentTarget.value)}
+                            placeholder={param.placeholder}
+                            class:mono={param.kind === "hex"}
+                          />
+                        {/if}
+                      </label>
+                    {/if}
+                  {/if}
+                {/each}
+              </div>
+            {/if}
+          {/each}
+        </div>
+      {/if}
+    {/if}
+  {/each}
 
   <button class="primary" onclick={encode}>Encode</button>
 
@@ -311,10 +376,11 @@
 
   .fields { display: flex; flex-direction: column; gap: 10px; }
   .mode-toggle { display: flex; gap: 0; border: 1px solid #30363d; border-radius: 6px; overflow: hidden; width: fit-content; }
-  .mode-toggle button { background: #0d1117; border: none; border-radius: 0; color: #8b949e; font-size: 12px; padding: 5px 12px; }
+  .mode-toggle button { background: #0d1117; border: none; border-radius: 0; color: #8b949e; font-size: 12px; padding: 5px 12px; cursor: pointer; font-family: inherit; }
   .mode-toggle button:hover { background: #21262d; color: #e6edf3; }
   .mode-toggle button.active { background: #21262d; color: #79c0ff; font-weight: 600; }
-  .mode-toggle button:first-child { border-right: 1px solid #30363d; }
+  .mode-toggle button:not(:last-child) { border-right: 1px solid #30363d; }
+
   .two-col {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -328,6 +394,14 @@
     letter-spacing: 0.06em;
     color: #8b949e;
   }
+  .lbl-sm {
+    font-size: 10px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #6e7681;
+    margin-top: 4px;
+  }
   input, textarea, select {
     background: #0d1117;
     border: 1px solid #30363d;
@@ -339,12 +413,44 @@
     resize: vertical;
     width: 100%;
     font-family: inherit;
+    box-sizing: border-box;
   }
   input:focus, textarea:focus, select:focus { border-color: #58a6ff; }
   .mono { font-family: "Cascadia Code", "Fira Code", monospace; font-size: 12px; }
   .dim { color: #8b949e; }
   .key-row { display: flex; gap: 6px; }
   .key-row input { flex: 1; }
+  .derived-pub { display: flex; flex-direction: column; gap: 2px; }
+
+  /* Toggle button — same design as the JSON toggle in DecodePanel */
+  .toggle-btn {
+    align-items: center;
+    align-self: flex-start;
+    background: #0d1117;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    color: #8b949e;
+    display: inline-flex;
+    font-size: 13px;
+    font-weight: 400;
+    gap: 8px;
+    padding: 7px 12px;
+    width: fit-content;
+  }
+  .toggle-btn:hover { background: #21262d; color: #e6edf3; }
+  .toggle-btn.active { background: #1f3a5c; border-color: #1f6feb; color: #79c0ff; }
+  .toggle-dot {
+    background: #30363d;
+    border-radius: 999px;
+    box-shadow: inset 0 0 0 1px #6e7681;
+    flex-shrink: 0;
+    height: 8px;
+    width: 8px;
+  }
+  .toggle-btn.active .toggle-dot {
+    background: #3fb950;
+    box-shadow: 0 0 0 2px rgba(63, 185, 80, 0.18);
+  }
 
   button { background: #21262d; border: 1px solid #30363d; border-radius: 6px; color: #e6edf3; cursor: pointer; font-size: 13px; padding: 8px 14px; transition: background 0.1s; font-family: inherit; }
   button:hover { background: #30363d; }

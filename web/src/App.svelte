@@ -1,21 +1,18 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { loadWasm, type MeshcoreWasm } from "./lib/wasm";
-  import EncodePanel from "./lib/EncodePanel.svelte";
-  import DecodePanel from "./lib/DecodePanel.svelte";
+  import PacketWorkspace from "./lib/PacketWorkspace.svelte";
   import BenchmarkPanel from "./lib/BenchmarkPanel.svelte";
   import { queryState, writeUrlState } from "./lib/urlState";
 
   let mc = $state<MeshcoreWasm | null>(null);
   let loadError = $state("");
-  let activeTab = $state<"encode" | "decode" | "benchmark">("encode");
+  let activeTab = $state<"packet" | "benchmark">("packet");
   let urlReady = $state(false);
 
   onMount(async () => {
     const view = queryState().get("view");
-    if (view === "encode" || view === "decode" || view === "benchmark") {
-      activeTab = view;
-    }
+    if (view === "benchmark") activeTab = "benchmark";
     urlReady = true;
 
     try {
@@ -27,7 +24,7 @@
 
   $effect(() => {
     if (!urlReady) return;
-    writeUrlState({ view: activeTab });
+    writeUrlState({ view: activeTab === "benchmark" ? "benchmark" : undefined }, {});
   });
 </script>
 
@@ -48,29 +45,28 @@
       <br />Run <code>make wasm</code> in the example directory first, then refresh.
     </div>
   {:else}
-    <nav class="top-tabs">
-      <button class:active={activeTab === "encode"} onclick={() => (activeTab = "encode")}>
-        ⬆ Encode
-      </button>
-      <button class:active={activeTab === "decode"} onclick={() => (activeTab = "decode")}>
-        ⬇ Decode
-      </button>
-      <button class:active={activeTab === "benchmark"} onclick={() => (activeTab = "benchmark")}>
-        Benchmark
-      </button>
-    </nav>
+    {#if activeTab === "benchmark"}
+      <nav class="top-tabs">
+        <button onclick={() => (activeTab = "packet")}>← Packet Tool</button>
+        <button class="active">Benchmark</button>
+      </nav>
+    {/if}
 
     <div class="panel-wrap">
       {#if !mc}
         <div class="loading">Loading WASM module…</div>
-      {:else if activeTab === "encode"}
-        <EncodePanel {mc} />
-      {:else if activeTab === "decode"}
-        <DecodePanel {mc} />
+      {:else if activeTab === "packet"}
+        <PacketWorkspace {mc} />
       {:else}
         <BenchmarkPanel {mc} />
       {/if}
     </div>
+
+    {#if activeTab === "packet"}
+      <div class="bench-link">
+        <button class="link-btn" onclick={() => (activeTab = "benchmark")}>Run benchmark</button>
+      </div>
+    {/if}
   {/if}
 
   <footer>
@@ -99,85 +95,33 @@
     margin: 0 auto;
     padding: 28px 16px 48px;
   }
-  header { margin-bottom: 20px; }
-  .title-row {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin-bottom: 4px;
-  }
-  h1 {
-    margin: 0;
-    font-size: 20px;
-    font-weight: 600;
-    color: #f0f6fc;
-  }
+  header { margin-bottom: 24px; }
+  .title-row { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
+  h1 { margin: 0; font-size: 20px; font-weight: 600; color: #f0f6fc; }
   .badge {
-    font-size: 11px;
-    font-weight: 500;
-    background: #1a3a2a;
-    color: #3fb950;
-    border: 1px solid #238636;
-    border-radius: 20px;
-    padding: 2px 8px;
+    font-size: 11px; font-weight: 500;
+    background: #1a3a2a; color: #3fb950;
+    border: 1px solid #238636; border-radius: 20px; padding: 2px 8px;
   }
-  .subtitle {
-    margin: 0;
-    color: #8b949e;
-    font-size: 13px;
-  }
-  .top-tabs {
-    display: flex;
-    gap: 0;
-    border-bottom: 1px solid #30363d;
-    margin-bottom: 20px;
-  }
+  .subtitle { margin: 0; color: #8b949e; font-size: 13px; }
+  .top-tabs { display: flex; gap: 8px; margin-bottom: 20px; }
   .top-tabs button {
-    background: none;
-    border: none;
-    border-bottom: 2px solid transparent;
-    color: #8b949e;
-    cursor: pointer;
-    font-size: 14px;
-    font-weight: 500;
-    padding: 10px 20px;
-    margin-bottom: -1px;
-    transition: color 0.15s, border-color 0.15s;
+    background: #21262d; border: 1px solid #30363d; border-radius: 6px;
+    color: #8b949e; cursor: pointer; font-size: 13px; font-family: inherit; padding: 6px 14px;
   }
   .top-tabs button:hover { color: #e6edf3; }
-  .top-tabs button.active {
-    color: #f0f6fc;
-    border-bottom-color: #1f6feb;
-  }
+  .top-tabs button.active { color: #79c0ff; border-color: #1f6feb; background: #1f3a5c; }
   .panel-wrap { width: 100%; }
-  .loading {
-    color: #8b949e;
-    padding: 48px;
-    text-align: center;
-  }
+  .loading { color: #8b949e; padding: 48px; text-align: center; }
   .fatal {
-    background: #3d1f1f;
-    border: 1px solid #6e2a2a;
-    border-radius: 6px;
-    padding: 16px;
-    color: #f97583;
-    line-height: 1.6;
+    background: #3d1f1f; border: 1px solid #6e2a2a; border-radius: 6px;
+    padding: 16px; color: #f97583; line-height: 1.6;
   }
-  .fatal code {
-    background: #1c1c1c;
-    padding: 2px 6px;
-    border-radius: 4px;
-    font-family: monospace;
-  }
-  footer {
-    margin-top: 28px;
-    color: #8b949e;
-    font-size: 12px;
-    text-align: center;
-  }
-  footer a {
-    color: #58a6ff;
-    text-decoration: none;
-  }
+  .fatal code { background: #1c1c1c; padding: 2px 6px; border-radius: 4px; font-family: monospace; }
+  .bench-link { margin-top: 12px; text-align: right; }
+  .link-btn { background: none; border: none; color: #8b949e; cursor: pointer; font-size: 12px; font-family: inherit; padding: 0; }
+  .link-btn:hover { color: #58a6ff; }
+  footer { margin-top: 28px; color: #8b949e; font-size: 12px; text-align: center; }
+  footer a { color: #58a6ff; text-decoration: none; }
   footer a:hover { text-decoration: underline; }
 </style>

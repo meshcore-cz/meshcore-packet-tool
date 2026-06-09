@@ -122,6 +122,98 @@ func generate(w io.Writer) error {
 		p("  { code: 0x%02x, label: %q },", int(pt), pt.String())
 	}
 	p("] as const")
+	p("")
+
+	// ── OpMeta interfaces ─────────────────────────────────────────────────────
+	p("export interface ParamMeta {")
+	p("  name: string;")
+	p("  kind: string;")
+	p("  label: string;")
+	p("  placeholder: string;")
+	p("  optional: boolean;")
+	p("  choices: { value: number; label: string }[];")
+	p("  showWhen: string;")
+	p("  showValue: number;")
+	p("  group: string;")
+	p("  action: string;")
+	p("  widget: string;")
+	p("  autoFill: string;")
+	p("  secret: boolean;")
+	p("}")
+	p("")
+	p("export interface ResultMeta {")
+	p("  name: string;")
+	p("  kind: string;")
+	p("  optional: boolean;")
+	p("  label: string;")
+	p("}")
+	p("")
+	p("export interface OpMeta {")
+	p("  name: string;")
+	p("  category: string;")
+	p("  label: string;")
+	p("  tabGroup: string;")
+	p("  tabGroupLabel: string;")
+	p("  tabGroupSub: string;")
+	p("  tabLabel: string;")
+	p("  packetType: string;")
+	p("  params: ParamMeta[];")
+	p("  result: ResultMeta[];")
+	p("  resultTypeName: string;")
+	p("}")
+	p("")
+
+	// ── OpMetas constant ──────────────────────────────────────────────────────
+	p("export const OpMetas: OpMeta[] = [")
+	for _, op := range meshpkt.Ops {
+		p("  {")
+		p("    name: %q,", op.Name)
+		p("    category: %q,", op.Category)
+		p("    label: %q,", op.Label)
+		p("    tabGroup: %q,", op.TabGroup)
+		p("    tabGroupLabel: %q,", op.TabGroupLabel)
+		p("    tabGroupSub: %q,", op.TabGroupSub)
+		p("    tabLabel: %q,", op.TabLabel)
+		p("    packetType: %q,", op.PacketType)
+		p("    resultTypeName: %q,", orDefault(op.ResultTypeName, pascal(op.Name)+"Result"))
+		// params
+		p("    params: [")
+		for _, param := range op.Params {
+			p("      {")
+			p("        name: %q,", param.Name)
+			p("        kind: %q,", paramKindStr(param.Kind))
+			p("        label: %q,", param.Label)
+			p("        placeholder: %q,", param.Placeholder)
+			p("        optional: %v,", param.Optional)
+			// choices
+			if len(param.Choices) > 0 {
+				p("        choices: [")
+				for _, c := range param.Choices {
+					p("          { value: %d, label: %q },", c.Value, c.Label)
+				}
+				p("        ],")
+			} else {
+				p("        choices: [],")
+			}
+			p("        showWhen: %q,", param.ShowWhen)
+			p("        showValue: %d,", param.ShowValue)
+			p("        group: %q,", param.Group)
+			p("        action: %q,", param.Action)
+			p("        widget: %q,", param.Widget)
+			p("        autoFill: %q,", param.AutoFill)
+			p("        secret: %v,", param.Secret)
+			p("      },")
+		}
+		p("    ],")
+		// result
+		p("    result: [")
+		for _, rf := range op.Result {
+			p("      { name: %q, kind: %q, optional: %v, label: %q },", rf.Name, resultKindStr(rf.Kind), rf.Optional, rf.Label)
+		}
+		p("    ],")
+		p("  },")
+	}
+	p("]")
 
 	return nil
 }
@@ -146,14 +238,37 @@ func pascal(s string) string {
 	return string(r)
 }
 
+func orDefault(s, def string) string {
+	if s != "" {
+		return s
+	}
+	return def
+}
+
 // paramKindTS maps a ParamKind to its TypeScript type string.
 // Both ParamString and ParamHex appear as "string" at the JS boundary.
 func paramKindTS(k meshpkt.ParamKind) string {
 	switch k {
 	case meshpkt.ParamString, meshpkt.ParamHex:
 		return "string"
-	case meshpkt.ParamInt:
+	case meshpkt.ParamInt, meshpkt.ParamFloat:
 		return "number"
+	default:
+		return "unknown"
+	}
+}
+
+// paramKindStr maps a ParamKind to a short string for OpMeta.
+func paramKindStr(k meshpkt.ParamKind) string {
+	switch k {
+	case meshpkt.ParamString:
+		return "string"
+	case meshpkt.ParamHex:
+		return "hex"
+	case meshpkt.ParamInt:
+		return "int"
+	case meshpkt.ParamFloat:
+		return "float"
 	default:
 		return "unknown"
 	}
@@ -161,6 +276,24 @@ func paramKindTS(k meshpkt.ParamKind) string {
 
 // resultKindTS maps a ResultKind to its TypeScript type string.
 func resultKindTS(k meshpkt.ResultKind) string {
+	switch k {
+	case meshpkt.ResultString:
+		return "string"
+	case meshpkt.ResultNumber:
+		return "number"
+	case meshpkt.ResultBool:
+		return "boolean"
+	case meshpkt.ResultStringArray:
+		return "string[]"
+	case meshpkt.ResultNumberPair:
+		return "[number, number]"
+	default:
+		return "unknown"
+	}
+}
+
+// resultKindStr maps a ResultKind to a short string for ResultMeta.
+func resultKindStr(k meshpkt.ResultKind) string {
 	switch k {
 	case meshpkt.ResultString:
 		return "string"

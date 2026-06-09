@@ -3,3 +3,5 @@ web/dist/
 web/public/meshpkt.wasm
 web/public/meshcore.wasm
 web/public/wasm_exec.js
+gen-ts
+meshpkt-wasm-lite
