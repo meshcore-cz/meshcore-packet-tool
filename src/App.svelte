@@ -3,7 +3,8 @@
   import { fade } from "svelte/transition";
   import { loadWasm, type MeshcoreWasm } from "./lib/wasm";
   import PacketWorkspace from "./lib/PacketWorkspace.svelte";
-  import meshpktPkg from "@meshcore-cz/meshpkt/package.json";
+  import appPkg from "../package.json";
+  const meshpktVersion = (appPkg.dependencies["@meshcore-cz/meshpkt"] as string).replace(/^[\^~]/, "");
 
   let mc = $state<MeshcoreWasm | null>(null);
   let loadError = $state("");
@@ -58,10 +59,10 @@
   {#if mc}
     <footer in:fade={{ duration: 500 }}>
       powered by
-      <a href="https://github.com/meshcore-cz/meshpkt" target="_blank" rel="noreferrer">meshpkt v{meshpktPkg.version}</a>
+      <a href="https://github.com/meshcore-cz/meshpkt" target="_blank" rel="noreferrer">meshpkt</a> v{meshpktVersion} 
       ·
       part of
-      <a href="https://github.com/meshcore-cz/meshcore-go" target="_blank" rel="noreferrer">meshcore-go SDK</a>
+      <a href="https://github.com/meshcore-cz/meshcore-go" target="_blank" rel="noreferrer">meshcore-go</a> SDK 
       ·
       <a href="https://github.com/meshcore-cz/meshcore-packet-tool" target="_blank" rel="noreferrer">source code</a>
     </footer>

@@ -218,8 +218,11 @@
   function runDecodeOp(op: OpMeta, payloadHex: string) {
     payloadErr = "";
     payload    = null;
+    const rawHex = hex.trim().replace(/\s/g, "");
     const args: unknown[] = op.params.map(p =>
-      p.autoFill === "payloadHex" ? payloadHex : getDStr(op.name, p.name)
+      p.autoFill === "payloadHex" ? payloadHex
+      : p.autoFill === "packetHex" ? rawHex
+      : getDStr(op.name, p.name)
     );
     const fn = (mc as Record<string, (...a: unknown[]) => unknown>)[op.name];
     if (typeof fn !== "function") { payloadErr = `Unknown op: ${op.name}`; return; }
