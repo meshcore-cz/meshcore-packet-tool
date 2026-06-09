@@ -53,6 +53,13 @@
       {/if}
     </div>
   {/if}
+
+  <footer>
+    Powered by
+    <a href="https://github.com/meshcore-cz/meshpkt" target="_blank" rel="noreferrer">meshpkt</a>
+    ·
+    <a href="https://github.com/meshcore-cz/meshcore-go" target="_blank" rel="noreferrer">meshcore-go</a>
+  </footer>
 </div>
 
 <style>
@@ -140,4 +147,15 @@
     border-radius: 4px;
     font-family: monospace;
   }
+  footer {
+    margin-top: 28px;
+    color: #8b949e;
+    font-size: 12px;
+    text-align: center;
+  }
+  footer a {
+    color: #58a6ff;
+    text-decoration: none;
+  }
+  footer a:hover { text-decoration: underline; }
 </style>

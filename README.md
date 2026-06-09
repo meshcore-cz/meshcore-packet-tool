@@ -1,4 +1,4 @@
-# wasm-packet-tool
+# meshcore-packet-tool
 
 A Svelte web app that encodes and decodes MeshCore radio packet wire formats,
 powered by the standalone [meshpkt](https://github.com/meshcore-cz/meshpkt)
