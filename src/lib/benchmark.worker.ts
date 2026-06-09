@@ -1,6 +1,7 @@
 type StartMessage = {
   type: "start";
-  wasmBase: string;
+  wasmUrl: string;
+  wasmExecUrl: string;
   packetHex: string;
   durationMs: number;
   batchSize: number;
@@ -31,13 +32,13 @@ type WorkerScope = DedicatedWorkerGlobalScope & {
 
 const scope = self as WorkerScope;
 
-async function loadWasm(wasmBase: string): Promise<(opName: string, argsJSON: string) => object> {
+async function loadWasm(wasmUrl: string, wasmExecUrl: string): Promise<(opName: string, argsJSON: string) => object> {
   if (!scope.Go) {
-    scope.importScripts(`${wasmBase}wasm_exec.js`);
+    scope.importScripts(wasmExecUrl);
   }
 
   const go = new scope.Go!();
-  const wasmFile = `${wasmBase}meshpkt.wasm`;
+  const wasmFile = wasmUrl;
   let instance: WebAssembly.Instance;
   try {
     const result = await WebAssembly.instantiateStreaming(fetch(wasmFile), go.importObject);
@@ -59,7 +60,7 @@ async function loadWasm(wasmBase: string): Promise<(opName: string, argsJSON: st
 }
 
 async function runBenchmark(msg: StartMessage): Promise<DoneMessage> {
-  const call = await loadWasm(msg.wasmBase);
+  const call = await loadWasm(msg.wasmUrl, msg.wasmExecUrl);
   const argsJSON = JSON.stringify([msg.packetHex]);
 
   const warmup = call("decodeEnvelope", argsJSON);

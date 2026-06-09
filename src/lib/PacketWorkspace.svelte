@@ -7,6 +7,7 @@
   import { isError, fmtTimestamp, type MeshcoreWasm, type Envelope } from "./wasm";
   import { hashState, queryState, writeUrlState, readStoredState, writeStoredState } from "./urlState";
   import { OpMetas, type OpMeta, type ParamMeta, type ResultMeta } from "./wasm";
+  import BenchmarkPanel from "./BenchmarkPanel.svelte";
 
   let { mc }: { mc: MeshcoreWasm } = $props();
 
@@ -26,7 +27,7 @@
 
   // ── shared hex ────────────────────────────────────────────────────────────────
   let hex    = $state("");
-  let mode   = $state<"decode" | "encode">("decode");
+  let mode   = $state<"decode" | "encode" | "benchmark">("decode");
   let copied = $state(false);
 
   // ── timing ────────────────────────────────────────────────────────────────────
@@ -90,7 +91,7 @@
   // Writes: hex, eError, opMs
   // No cycle: written vars are not read inside this effect.
   $effect(() => {
-    if (mode !== "encode") return;
+    if (mode !== "encode") return; // also skips "benchmark"
 
     // Explicitly read reactive deps so Svelte tracks them
     void JSON.stringify(eVals);
@@ -427,6 +428,7 @@
   <div class="mode-bar">
     <button class="mode-tab" class:active={mode === "decode"} onclick={switchToDecode}>↓ Decode</button>
     <button class="mode-tab" class:active={mode === "encode"} onclick={switchToEncode}>↑ Encode</button>
+    <button class="mode-tab bench-tab" class:active={mode === "benchmark"} onclick={() => mode = "benchmark"}>Benchmark</button>
   </div>
 
   <!-- ══════════════════ DECODE ══════════════════ -->
@@ -456,12 +458,6 @@
           </tbody>
         </table>
       </div>
-
-      <!-- What is this packet type? -->
-      {@const decodeDoc = encodeOps.find(o => o.tabGroupLabel === envelope.type)?.tabGroupDoc || decodeOps.find(o => o.packetType === envelope.type)?.tabGroupDoc || ""}
-      {#if decodeDoc}
-        <div class="doc-note"><b>{envelope.type}</b> — {decodeDoc}</div>
-      {/if}
 
       <!-- Step 2 -->
       {#if opsForDecodeType(envelope.type).length > 0}
@@ -560,12 +556,16 @@
           <div class="json-out">{@html jsonHtml}</div>
         {/if}
       </div>
+      {@const decodeDoc = encodeOps.find(o => o.tabGroupLabel === envelope.type)?.tabGroupDoc || decodeOps.find(o => o.packetType === envelope.type)?.tabGroupDoc || ""}
+      {#if decodeDoc}
+        <div class="help-note">ℹ {decodeDoc}</div>
+      {/if}
     {/if}
 
     </div><!-- /panel -->
 
   <!-- ══════════════════ ENCODE ══════════════════ -->
-  {:else}
+  {:else if mode === "encode"}
     <div class="panel">
     <div class="type-tabs">
       {#each encodeTabGroups as tg}
@@ -588,10 +588,6 @@
                 <button class:active={op.name === v.name} onclick={() => eVariants[tg] = v.name}>{v.tabLabel || v.name}</button>
               {/each}
             </div>
-          {/if}
-
-          {#if op.tabGroupDoc}
-            <div class="doc-note"><b>{op.tabGroupLabel}</b> — {op.tabGroupDoc}</div>
           {/if}
 
           <div class="fields">
@@ -661,10 +657,17 @@
           {#if eError}
             <div class="err">{eError}</div>
           {/if}
+          {#if op.tabGroupDoc}
+            <div class="help-note">ℹ {op.tabGroupDoc}</div>
+          {/if}
         {/if}
       {/if}
     {/each}
     </div><!-- /panel -->
+
+  <!-- ══════════════════ BENCHMARK ══════════════════ -->
+  {:else if mode === "benchmark"}
+    <BenchmarkPanel {mc} packetHex={hex} />
 
   {/if}
 </div>
@@ -674,7 +677,7 @@
 
   /* ── Top tabs (old style) ──────────────────────────────────────────────────── */
   /* ── Mode tabs ───────────────────────────────────────────────────────────── */
-  .mode-bar { display: flex; border-bottom: 1px solid #30363d; }
+  .mode-bar { display: flex; border-bottom: 1px solid #30363d; align-items: stretch; }
   .mode-tab {
     background: none; border: none; border-bottom: 2px solid transparent;
     border-radius: 0;
@@ -684,6 +687,8 @@
   }
   .mode-tab:hover { color: #e6edf3; }
   .mode-tab.active { color: #f0f6fc; border-bottom-color: #1f6feb; }
+  .bench-tab { margin-left: auto; font-size: 13px; color: #6e7681; }
+  .bench-tab:hover { color: #8b949e; }
 
   /* ── Panel card ───────────────────────────────────────────────────────────── */
   .panel {
@@ -804,11 +809,11 @@
   /* ── Misc ─────────────────────────────────────────────────────────────────── */
   .err { background: #3d1f1f; border: 1px solid #6e2a2a; border-radius: 6px; color: #f97583; font-size: 12px; padding: 8px 10px; }
   .info-note { background: #1c2128; border: 1px solid #30363d; border-radius: 6px; color: #8b949e; font-size: 12px; padding: 10px 12px; }
-  .doc-note {
-    background: #0d1117; border: 1px solid #30363d; border-left: 3px solid #388bfd;
-    border-radius: 6px; color: #8b949e; font-size: 12px; line-height: 1.6; padding: 10px 12px;
+  .help-note {
+    border-top: 1px solid #21262d;
+    color: #6e7681; font-size: 11px; line-height: 1.6;
+    margin-top: 4px; padding-top: 10px;
   }
-  .doc-note b { color: #c9d1d9; font-weight: 600; }
   .empty-state { color: #6e7681; font-size: 13px; padding: 16px 0; text-align: center; }
 
   /* ── Example links ────────────────────────────────────────────────────────── */

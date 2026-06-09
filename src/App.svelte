@@ -1,30 +1,22 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import { fade } from "svelte/transition";
   import { loadWasm, type MeshcoreWasm } from "./lib/wasm";
   import PacketWorkspace from "./lib/PacketWorkspace.svelte";
-  import BenchmarkPanel from "./lib/BenchmarkPanel.svelte";
-  import { queryState, writeUrlState } from "./lib/urlState";
 
   let mc = $state<MeshcoreWasm | null>(null);
   let loadError = $state("");
-  let activeTab = $state<"packet" | "benchmark">("packet");
-  let urlReady = $state(false);
+  let showLoader = $state(false);
 
   onMount(async () => {
-    const view = queryState().get("view");
-    if (view === "benchmark") activeTab = "benchmark";
-    urlReady = true;
-
+    // Only show the loader if WASM takes more than 300ms — avoids a flash on fast connections
+    const loaderTimer = setTimeout(() => { showLoader = true; }, 300);
     try {
       mc = await loadWasm();
     } catch (e) {
       loadError = String(e);
     }
-  });
-
-  $effect(() => {
-    if (!urlReady) return;
-    writeUrlState({ view: activeTab === "benchmark" ? "benchmark" : undefined }, {});
+    clearTimeout(loaderTimer);
   });
 </script>
 
@@ -42,42 +34,37 @@
   {#if loadError}
     <div class="fatal">
       <strong>Failed to load WASM module:</strong> {loadError}
-      <br />Run <code>make wasm</code> in the example directory first, then refresh.
     </div>
   {:else}
-    {#if activeTab === "benchmark"}
-      <nav class="top-tabs">
-        <button onclick={() => (activeTab = "packet")}>← Packet Tool</button>
-        <button class="active">Benchmark</button>
-      </nav>
-    {/if}
-
     <div class="panel-wrap">
       {#if !mc}
-        <div class="loading">Loading WASM module…</div>
-      {:else if activeTab === "packet"}
-        <PacketWorkspace {mc} />
+        {#if showLoader}
+          <div class="loading" in:fade={{ duration: 150 }}>
+            <div class="loader-rings">
+              <span></span><span></span><span></span>
+            </div>
+            <div class="loader-label">Loading codec…</div>
+          </div>
+        {/if}
       {:else}
-        <BenchmarkPanel {mc} />
+        <div in:fade={{ duration: 500 }}>
+          <PacketWorkspace {mc} />
+        </div>
       {/if}
     </div>
-
-    {#if activeTab === "packet"}
-      <div class="bench-link">
-        <button class="link-btn" onclick={() => (activeTab = "benchmark")}>Run benchmark</button>
-      </div>
-    {/if}
   {/if}
 
-  <footer>
-    powered by
-    <a href="https://github.com/meshcore-cz/meshpkt" target="_blank" rel="noreferrer">meshpkt</a>
-    ·
-    part of
-    <a href="https://github.com/meshcore-cz/meshcore-go" target="_blank" rel="noreferrer">meshcore-go SDK</a>
-    ·
-    <a href="https://github.com/meshcore-cz/meshcore-packet-tool" target="_blank" rel="noreferrer">source code</a>
-  </footer>
+  {#if mc}
+    <footer in:fade={{ duration: 500 }}>
+      powered by
+      <a href="https://github.com/meshcore-cz/meshpkt" target="_blank" rel="noreferrer">meshpkt</a>
+      ·
+      part of
+      <a href="https://github.com/meshcore-cz/meshcore-go" target="_blank" rel="noreferrer">meshcore-go SDK</a>
+      ·
+      <a href="https://github.com/meshcore-cz/meshcore-packet-tool" target="_blank" rel="noreferrer">source code</a>
+    </footer>
+  {/if}
 </div>
 
 <style>
@@ -104,24 +91,37 @@
     border: 1px solid #238636; border-radius: 20px; padding: 2px 8px;
   }
   .subtitle { margin: 0; color: #8b949e; font-size: 13px; }
-  .top-tabs { display: flex; gap: 8px; margin-bottom: 20px; }
-  .top-tabs button {
-    background: #21262d; border: 1px solid #30363d; border-radius: 6px;
-    color: #8b949e; cursor: pointer; font-size: 13px; font-family: inherit; padding: 6px 14px;
+.panel-wrap { width: 100%; }
+  /* ── Loader ───────────────────────────────────────────────────────────────── */
+  .loading {
+    display: flex; flex-direction: column; align-items: center;
+    gap: 20px; padding: 72px 0;
   }
-  .top-tabs button:hover { color: #e6edf3; }
-  .top-tabs button.active { color: #79c0ff; border-color: #1f6feb; background: #1f3a5c; }
-  .panel-wrap { width: 100%; }
-  .loading { color: #8b949e; padding: 48px; text-align: center; }
+  .loader-rings {
+    position: relative; width: 48px; height: 48px;
+  }
+  .loader-rings span {
+    position: absolute; inset: 0; border-radius: 50%;
+    border: 2px solid transparent;
+    border-top-color: #1f6feb;
+    animation: spin 1.1s linear infinite;
+  }
+  .loader-rings span:nth-child(2) {
+    inset: 8px; border-top-color: #388bfd;
+    animation-duration: 0.85s; animation-direction: reverse;
+  }
+  .loader-rings span:nth-child(3) {
+    inset: 16px; border-top-color: #79c0ff;
+    animation-duration: 0.6s;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .loader-label { color: #6e7681; font-size: 12px; letter-spacing: 0.06em; }
   .fatal {
     background: #3d1f1f; border: 1px solid #6e2a2a; border-radius: 6px;
     padding: 16px; color: #f97583; line-height: 1.6;
   }
   .fatal code { background: #1c1c1c; padding: 2px 6px; border-radius: 4px; font-family: monospace; }
-  .bench-link { margin-top: 12px; text-align: right; }
-  .link-btn { background: none; border: none; color: #8b949e; cursor: pointer; font-size: 12px; font-family: inherit; padding: 0; }
-  .link-btn:hover { color: #58a6ff; }
-  footer { margin-top: 28px; color: #8b949e; font-size: 12px; text-align: center; }
+footer { margin-top: 28px; color: #8b949e; font-size: 12px; text-align: center; }
   footer a { color: #58a6ff; text-decoration: none; }
   footer a:hover { text-decoration: underline; }
 </style>

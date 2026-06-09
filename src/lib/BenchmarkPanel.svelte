@@ -1,18 +1,28 @@
 <script lang="ts">
   import { isError, type MeshcoreWasm } from "./wasm";
-
-  let { mc }: { mc: MeshcoreWasm } = $props();
+  import wasmUrl from "@meshcore-cz/meshpkt/meshpkt.wasm?url";
+  import wasmExecUrl from "@meshcore-cz/meshpkt/wasm_exec.js?url";
 
   const samplePacket =
     "21068034ed885125d3ec9c576026260a1aee38afc08b4f64ac5d6334004d75fbd8a9e295d05a144d7cbe2bd3799df48a1e21d66ece16bf5e97f49290";
+
+  let { mc, packetHex = samplePacket }: { mc: MeshcoreWasm; packetHex?: string } = $props();
 
   type BenchResult = {
     packets: number;
     elapsedMs: number;
     packetsPerSecond: number;
+    bytesPerSecond: number;
+    packetBytes: number;
     workers: number;
     batchSize: number;
   };
+
+  function fmtBytes(bps: number): string {
+    if (bps >= 1_000_000) return (bps / 1_000_000).toFixed(2) + " MB/s";
+    if (bps >= 1_000)     return (bps / 1_000).toFixed(2) + " KB/s";
+    return Math.round(bps) + " B/s";
+  }
 
   type WorkerResult = { count: number; elapsedMs: number; error?: string };
   type WorkerRun = {
@@ -24,7 +34,6 @@
     | { type: "progress"; count: number; elapsedMs: number }
     | { type: "done"; count: number; elapsedMs: number; error?: string };
 
-  let packetHex = $state(samplePacket);
   let durationSec = $state(3);
   let workerCount = $state(Math.min(8, navigator.hardwareConcurrency || 8));
   let batchSize = $state(1000);
@@ -117,10 +126,14 @@
 
       const packets = results.reduce((sum, r) => sum + r.count, 0);
       const elapsedMs = Math.max(performance.now() - runStartedAt, ...results.map((r) => r.elapsedMs));
+      const packetBytes = Math.floor(sanitizeHex(packetHex).length / 2);
+      const packetsPerSecond = packets / (elapsedMs / 1000);
       result = {
         packets,
         elapsedMs,
-        packetsPerSecond: packets / (elapsedMs / 1000),
+        packetsPerSecond,
+        bytesPerSecond: packetsPerSecond * packetBytes,
+        packetBytes,
         workers,
         batchSize,
       };
@@ -153,7 +166,8 @@
       };
       worker.postMessage({
         type: "start",
-        wasmBase: import.meta.env.BASE_URL,
+        wasmUrl,
+        wasmExecUrl,
         packetHex: hex,
         durationMs,
         batchSize: batch,
@@ -169,10 +183,10 @@
       Measures `decodeEnvelope` throughput. Each worker runs its own TinyGo WASM instance for the selected duration.
     </p>
 
-    <label>
-      <span class="lbl">Hex packet</span>
-      <textarea bind:value={packetHex} rows={4} class="mono" placeholder="Paste hex-encoded MeshCore packet…"></textarea>
-    </label>
+    <div class="hex-preview">
+      <span class="lbl">Packet</span>
+      <span class="mono hex-val">{packetHex || "(no packet in workspace)"}</span>
+    </div>
 
     <div class="settings">
       <label>
@@ -223,11 +237,21 @@
 
   {#if result}
     <div class="result-card">
-      <div class="score">{Math.round(result.packetsPerSecond).toLocaleString()} packets/sec</div>
+      <div class="scores">
+        <div>
+          <div class="score-label">Throughput</div>
+          <div class="score">{Math.round(result.packetsPerSecond).toLocaleString()} packets/sec</div>
+        </div>
+        <div>
+          <div class="score-label">Data rate</div>
+          <div class="score">{fmtBytes(result.bytesPerSecond)}</div>
+        </div>
+      </div>
       <table>
         <tbody>
           <tr><td>Total packets</td><td>{result.packets.toLocaleString()}</td></tr>
           <tr><td>Elapsed</td><td>{(result.elapsedMs / 1000).toFixed(2)}s</td></tr>
+          <tr><td>Packet size</td><td>{result.packetBytes} bytes</td></tr>
           <tr><td>Workers</td><td>{result.workers}</td></tr>
           <tr><td>Batch size</td><td>{result.batchSize.toLocaleString()}</td></tr>
         </tbody>
@@ -271,6 +295,15 @@
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.04em;
+  }
+  .hex-preview {
+    display: flex; flex-direction: column; gap: 4px;
+  }
+  .hex-val {
+    background: #0d1117; border: 1px solid #30363d; border-radius: 6px;
+    color: #79c0ff; font-size: 12px; line-height: 1.6;
+    padding: 8px 10px; word-break: break-all;
+    white-space: pre-wrap; opacity: 0.8;
   }
   input, textarea {
     width: 100%;
@@ -383,11 +416,17 @@
     border-radius: 8px;
     padding: 16px;
   }
+  .scores {
+    display: flex; gap: 32px; margin-bottom: 16px; flex-wrap: wrap;
+  }
+  .score-label {
+    color: #8b949e; font-size: 11px; font-weight: 600;
+    letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 2px;
+  }
   .score {
     color: #3fb950;
-    font-size: 28px;
+    font-size: 24px;
     font-weight: 700;
-    margin-bottom: 12px;
   }
   table {
     width: 100%;
