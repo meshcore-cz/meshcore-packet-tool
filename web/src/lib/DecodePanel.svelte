@@ -1,5 +1,9 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import { createHighlighterCore, type HighlighterCore } from "shiki/core";
+  import { createJavaScriptRegexEngine } from "shiki/engine/javascript";
+  import jsonLang from "@shikijs/langs/json";
+  import githubDark from "@shikijs/themes/github-dark";
   import {
     isError,
     fmtTimestamp,
@@ -48,6 +52,10 @@
   let payloadResult = $state<PayloadResult | null>(null);
   let payloadErr    = $state("");
   let urlReady      = $state(false);
+  let showJSON      = $state(false);
+  let jsonHTML      = $state("");
+  let highlightRun  = 0;
+  let highlighter: Promise<HighlighterCore> | undefined;
 
   onMount(() => {
     const q = queryState();
@@ -62,6 +70,7 @@
     p_secret = h.get("d_secret") ?? p_secret;
     p_priv = h.get("d_private") ?? p_priv;
     p_peerPub = q.get("d_peer_pub") ?? p_peerPub;
+    showJSON = q.get("d_json") === "1";
 
     urlReady = true;
     if (hexInput && parseEnvelope()) {
@@ -79,6 +88,7 @@
       {
         view: "decode",
         d_packet: hexInput,
+        d_json: showJSON ? "1" : null,
         d_key_mode: p_grpKeyMode,
         d_channel: p_grpKeyMode === "name" ? p_channel : null,
         d_peer_pub: p_peerPub,
@@ -88,6 +98,10 @@
         d_private: p_priv,
       },
     );
+  });
+
+  $effect(() => {
+    void updateHighlightedJSON(showJSON, decodedJSON());
   });
 
   function clearPayload() {
@@ -133,6 +147,39 @@
     p_priv = kp.privateKey;
   }
 
+  function decodedJSON(): string {
+    return JSON.stringify(
+      {
+        envelope,
+        payload: payloadResult,
+      },
+      null,
+      2,
+    );
+  }
+
+  async function updateHighlightedJSON(enabled: boolean, json: string) {
+    const run = ++highlightRun;
+    if (!enabled || !envelope) {
+      jsonHTML = "";
+      return;
+    }
+
+    highlighter ??= createHighlighterCore({
+      themes: [githubDark],
+      langs: jsonLang,
+      engine: createJavaScriptRegexEngine(),
+    });
+
+    const html = (await highlighter).codeToHtml(json, {
+      lang: "json",
+      theme: "github-dark",
+    });
+    if (run === highlightRun) {
+      jsonHTML = html;
+    }
+  }
+
 </script>
 
 <div class="panel">
@@ -172,6 +219,21 @@
         </tbody>
       </table>
     </div>
+
+    <button class:active={showJSON} class="json-toggle" onclick={() => (showJSON = !showJSON)}>
+      <span class="json-toggle-dot"></span>
+      <span>{showJSON ? "Hide decoded JSON" : "Show decoded JSON"}</span>
+    </button>
+
+    {#if showJSON}
+      <div class="json-out">
+        {#if jsonHTML}
+          {@html jsonHTML}
+        {:else}
+          <pre>{decodedJSON()}</pre>
+        {/if}
+      </div>
+    {/if}
 
     <!-- ── Step 2 ──────────────────────────────────────────────────────────── -->
     {#if envelope.type === "GRP_TXT"}
@@ -312,6 +374,60 @@
   .mode-toggle button:hover { background: #21262d; color: #e6edf3; }
   .mode-toggle button.active { background: #21262d; color: #79c0ff; font-weight: 600; }
   .mode-toggle button:first-child { border-right: 1px solid #30363d; }
+  .json-toggle {
+    align-items: center;
+    align-self: flex-start;
+    background: #0d1117;
+    border: 1px solid #30363d;
+    color: #8b949e;
+    display: inline-flex;
+    font-size: 12px;
+    gap: 8px;
+    padding: 6px 10px;
+    width: fit-content;
+  }
+  .json-toggle:hover {
+    background: #21262d;
+    color: #e6edf3;
+  }
+  .json-toggle.active {
+    background: #1f3a5c;
+    border-color: #1f6feb;
+    color: #79c0ff;
+  }
+  .json-toggle-dot {
+    background: #30363d;
+    border-radius: 999px;
+    box-shadow: inset 0 0 0 1px #6e7681;
+    height: 8px;
+    width: 8px;
+  }
+  .json-toggle.active .json-toggle-dot {
+    background: #3fb950;
+    box-shadow: 0 0 0 2px rgba(63, 185, 80, 0.18);
+  }
+  .json-out {
+    background: #0d1117;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    color: #d2a8ff;
+    font-family: "Cascadia Code", "Fira Code", monospace;
+    font-size: 12px;
+    line-height: 1.55;
+    margin: 0;
+    padding: 12px;
+  }
+  .json-out :global(pre) {
+    background: transparent !important;
+    margin: 0;
+    overflow: visible;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .json-out :global(code) {
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
   .error { background: #3d1f1f; border: 1px solid #6e2a2a; border-radius: 6px; color: #f97583; font-size: 12px; padding: 8px 10px; }
   .info-note { background: #1c2128; border: 1px solid #30363d; border-radius: 6px; color: #8b949e; font-size: 12px; padding: 10px 12px; }
   .info-note code { color: #79c0ff; }
