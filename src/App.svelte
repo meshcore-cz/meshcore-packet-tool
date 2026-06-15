@@ -3,6 +3,7 @@
   import { fade } from "svelte/transition";
   import { loadWasm, type MeshcoreWasm } from "./lib/wasm";
   import PacketWorkspace from "./lib/PacketWorkspace.svelte";
+  import IdentityManager from "./lib/IdentityManager.svelte";
   import appPkg from "../package.json";
   const meshpktVersion = (appPkg.dependencies["@meshcore-cz/meshpkt"] as string).replace(/^[\^~]/, "");
 
@@ -53,6 +54,12 @@
           <PacketWorkspace {mc} />
         </div>
       {/if}
+    </div>
+  {/if}
+
+  {#if mc}
+    <div in:fade={{ duration: 500 }} style="margin-top: 16px;">
+      <IdentityManager {mc} />
     </div>
   {/if}
 
